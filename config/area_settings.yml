@@ -1,21 +1,20 @@
-# 接觸面積設定
+# config/area_settings.yml
 contact_areas:
-  # STM/CAFM 典型值 (cm²)
-  stm_sharp_tip: 1e-14      # 尖探針 (~10 nm)
-  stm_blunt_tip: 1e-12      # 鈍探針 (~100 nm)
-  cafm_typical: 1e-10       # CAFM 典型 (~1 µm)
+  # CAFM/STM tip 類型
+  stm_sharp_tip: 1e-14      # ~10 nm radius
+  stm_blunt_tip: 1e-12      # ~100 nm radius  
+  cafm_typical: 1e-10       # ~1 µm contact
   
-  # 納米級器件
-  nanowire: 1e-11           # 納米線接觸
-  nanoparticle: 1e-13       # 納米顆粒
+  # 材料特定 (您目前主要用這些)
+  MoS2_flake: 1e-12         # 單/少層 MoS2 典型值
+  MoS2_bulk: 1e-9           # 多層/體材
+  graphene_flake: 1e-11
   
-  # 材料特定
-  MoS2_flake: 1e-12         # MoS2 薄片
-  graphene_flake: 1e-11     # 石墨烯
-  
-# 預設設定
-default:
-  material: 'MoS2'
-  area: 1e-12               # 預設面積
-  temperature: 300.0        # 溫度 (K)
-  fit_range: [0.1, 0.25]    # 擬合範圍 (V)
+  # 自定義 (實驗中可臨時覆蓋)
+  custom: null              # 使用時再傳入
+
+# 便捷查詢表 (可選)
+tip_radius_lookup:
+  10nm: 1e-14
+  50nm: 2.5e-13
+  100nm: 1e-12

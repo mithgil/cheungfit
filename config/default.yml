@@ -1,23 +1,33 @@
-# config/default.yaml
+# config/default.yml
 schottky:
-  temperature: 300.0
-  material: MoS2
-  area: 1.0e-8
-  skip_points: 3
-  use_parallel: true
+  temperature: 300.0        # K
+  material: "MoS2"
+  richardson_constant: 54.0 # A/cm²/K², MoS2 理論值範圍 40-120
+  skip_initial_points: 3    # 忽略前幾個噪聲點
+  
+parallel:
+  use_joblib: true
   n_workers: 8
   chunk_size: 50
 
 fitting:
-  ranges:
+  # 滑動窗口預設 (可被 layer_type 覆蓋)
+  window_size: 50
+  step_size: 5
+  min_r_squared: 0.98
+  
+  # 物理約束
+  ideality_factor: {min: 1.0, max: 2.5}  # n 的合理範圍
+  series_resistance: {min: 0, max: 1e10} # Ω
+  
+  # 預選 bias range (備用，若自動失敗可 fallback)
+  fallback_ranges:
     - [0.05, 0.15]
-    - [0.08, 0.18]
-    - [0.10, 0.20]
-    - [0.12, 0.22]
     - [0.10, 0.25]
 
 visualization:
-  figsize: [16, 12]
-  cmap_ideality: viridis
-  cmap_barrier: plasma
-  cmap_r2: RdYlGn
+  figsize: [16, 10]
+  dpi: 300
+  cmap_params: {n: "viridis", phi_b: "plasma", Rs: "magma"}
+  font: {family: "Arial", size: 12}
+

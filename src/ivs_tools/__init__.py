@@ -16,8 +16,9 @@ from .physics.sliding_window_fitter import (
     FittingResult
 )
 
-# 可選：保留舊函數供過渡期使用
-# from .physics.cheung_analysis import cheung_analysis
+
+# 2. 從 schottky_analyzer.py 匯入 Analyzer
+from .physics.schottky_analyzer import SchottkyAnalyzer  # ✅ 正確來源！
 
 # Viz 模組
 # from .viz.cheung_diagnostic import plot_fitting_diagnostic
@@ -26,10 +27,11 @@ from .physics.sliding_window_fitter import (
 __all__ = [
     "__version__",
     "HDF5Analyzer",
+    "SchottkyAnalyzer",  # ✅ 確認這行存在
     "SlidingWindowCheungFitter",
-    "FittingConfig", 
-    "FittingResult",
-    # "cheung_analysis",  # 若 archive 則移除
+    "FittingConfig",
+    "FittingResult"
+    # "plot_fitting_diagnostic",
 ]
 
 # ── 延遲載入 (可選，減少 import 時間) ──
