@@ -1,0 +1,23 @@
+# config/default.yaml
+schottky:
+  temperature: 300.0
+  material: MoS2
+  area: 1.0e-8
+  skip_points: 3
+  use_parallel: true
+  n_workers: 8
+  chunk_size: 50
+
+fitting:
+  ranges:
+    - [0.05, 0.15]
+    - [0.08, 0.18]
+    - [0.10, 0.20]
+    - [0.12, 0.22]
+    - [0.10, 0.25]
+
+visualization:
+  figsize: [16, 12]
+  cmap_ideality: viridis
+  cmap_barrier: plasma
+  cmap_r2: RdYlGn

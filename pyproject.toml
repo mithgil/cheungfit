@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]  # 建議新版 setuptools
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ivs_tools"
+version = "0.1.0"
+description = "Nanonis SPM 3D Data Processing and Schottky Analysis Tools"
+authors = [{name = "Tim", email = "re09022318@gmail.com"}]
+readme = "README.md"  # 建議新增
+requires-python = ">=3.9"
+dependencies = [
+    "numpy>=1.20",
+    "scipy>=1.7", 
+    "h5py>=3.0",
+    "matplotlib>=3.4",
+    "pandas>=1.3",
+    "pyyaml>=6.0",
+    "tqdm>=4.60",  # 進度條
+]
+
+# ✅ 關鍵：告訴 setuptools 去 src/ 找 package
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# ✅ 可選：開發依賴 (用 pip install -e ".[dev]" 安裝)
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "black>=22.0",
+    "flake8>=5.0",
+    "jupyterlab>=3.0",
+    "ipywidgets>=7.7",
+]
+viz = [
+    "matplotlib-scalebar>=0.8",
+    "seaborn>=0.12",
+]
+
+# ✅ 可選：設定 entry point (未來可做 CLI 工具)
+# [project.scripts]
+# ivs-analyze = "ivs_tools.cli:main"

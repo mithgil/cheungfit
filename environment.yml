@@ -1,0 +1,19 @@
+# environment.yml
+name: nanonis-analysis
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.9
+  - numpy
+  - scipy
+  - matplotlib
+  - h5py
+  - tqdm
+  - pyyaml
+  - jupyter
+  - notebook
+  - ipywidgets
+  - pip
+  - pip:
+    - -e .
