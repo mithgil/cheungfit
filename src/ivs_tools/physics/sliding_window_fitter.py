@@ -217,8 +217,13 @@ class SlidingWindowCheungFitter:
         
         # === 診斷計數器 ===
         stats_counter = {
-            'total': 0, 'monotonic_fail': 0, 'r2_pre_fail': 0, 
-            'constraint_fail': 0, 'r2_final_fail': 0, 'rs_mismatch': 0, 'success': 0
+            'total': 0,           # 總掃描窗口數
+            'monotonic_fail': 0,  # 階段 1: 電流非單調 → 跳過
+            'r2_pre_fail': 0,     # 階段 2: Cheung I 的 R² < 0.8 → 跳過
+            'constraint_fail': 0, # 階段 3: n 或 R² 超出約束 → 跳過
+            'r2_final_fail': 0,   # 階段 4: Cheung II 的 R² 不足 → 跳過
+            'rs_mismatch': 0,     # 階段 5: Rs 不一致 → 跳過
+            'success': 0          # ✅ 通過所有階段
         }
         n_samples = []
         r2_samples = []
