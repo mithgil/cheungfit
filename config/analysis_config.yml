@@ -1,0 +1,68 @@
+# config/analysis_config.yml
+# 統一分析配置：儀器 + 物理 + 擬合參數
+
+# ── 實驗條件 ──
+experiment:
+  temperature_K: 300.0
+  material: "MoS2"
+  instrument: "CAFM"
+  
+# ── 物理常數 ──
+physics:
+  richardson_constant: 54.0    # A/cm²/K², MoS₂ 理論值 ~40-120
+  boltzmann_eV_K: 8.617333e-5  # eV/K
+  electron_charge_C: 1.6021766e-19  # C
+
+# ── 接觸面積 (與 area_settings.yml 整合或保留分開) ──
+contact_areas:
+  cafm_tip_1nm: 7.854e-15
+  cafm_tip_5nm: 1.963e-14
+  cafm_tip_10nm: 7.854e-13   # ✅ 預設
+  cafm_tip_20nm: 3.142e-12
+  cafm_tip_50nm: 1.963e-11
+  MoS2_monolayer: 7.854e-13
+  MoS2_few_layer: 3.142e-12
+  custom: null
+
+defaults:
+  area_key: 'cafm_tip_10nm'
+
+# ── 擬合參數 ──
+fitting:
+  # 滑動窗口
+  window_size: 25          # ← 建議減小（避免高偏壓區點數不足）
+  step_size: 3
+  min_r_squared: 0.90      # ← 放寬（從 0.99 → 0.90）
+  
+  # 物理約束
+  ideality_factor:
+    min: 0.5               # ← 放寬（從 1.0 → 0.5）
+    max: 5.0               # ← 放寬（從 2.5 → 5.0）
+  series_resistance:
+    min: 0
+    max: 1e10
+  
+  # 數據預處理
+  savgol_polyorder: 3
+  savgol_window: 31
+  current_threshold: 5e-13
+  
+  # 層數相關覆蓋
+  layer_overrides:
+    monolayer:
+      window_size: 30
+      ideality_factor: {max: 2.0}
+      min_r_squared: 0.99
+    bilayer:
+      window_size: 40
+      ideality_factor: {max: 2.2}
+    multilayer:
+      window_size: 50
+      ideality_factor: {max: 2.5}
+
+# ── 批量處理 ──
+batch:
+  skip_initial_points: 3
+  use_parallel: true
+  n_workers: 8
+  chunk_size: 50

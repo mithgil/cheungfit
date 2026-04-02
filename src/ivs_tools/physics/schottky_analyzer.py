@@ -1,7 +1,7 @@
 # src/ivs_tools/physics/schottky_analyzer.py
 """
 SchottkyAnalyzer: High-level interface for Schottky barrier analysis
-整合配置管理、批量處理、結果格式化
+整合 YAML 配置、批量處理、結果格式化
 """
 import numpy as np
 from typing import Optional, Dict, List, Tuple, Union
@@ -12,70 +12,90 @@ from .sliding_window_fitter import (
     FittingConfig, 
     FittingResult
 )
+from ..config_loader import ConfigLoader
 
 
 class SchottkyAnalyzer:
     """
     Schottky Barrier Analysis Interface
     
+    參數優先級：
+    1. __init__ 顯式傳入 (最高)
+    2. YAML 配置預設
+    3. 硬編碼預設 (最低)
+    
     使用方式:
     --------
-    analyzer = SchottkyAnalyzer(area_cm2=1e-12, temperature=300)
-    result = analyzer.fit_pixel(bias, current, layer_type="monolayer")
+    # 方式 1: 完全從 YAML 載入
+    analyzer = SchottkyAnalyzer()
     
-    或批量:
-    results = analyzer.batch_fit(h5map, pixel_list=[(0,0), (1,1), ...])
+    # 方式 2: 只覆蓋面積
+    analyzer = SchottkyAnalyzer(area_cm2=1e-12)
+    
+    # 方式 3: 完全自訂
+    analyzer = SchottkyAnalyzer(
+        area_cm2=1e-12, temperature=350, a_star=60, load_from_yaml=False
+    )
     """
     
-    def __init__(self, area_cm2: float, temperature: float = 300.0, a_star: float = 54.0):
+    def __init__(
+        self, 
+        area_cm2: Optional[float] = None,
+        temperature: Optional[float] = None,
+        a_star: Optional[float] = None,
+        layer_type: str = "multilayer",
+        load_from_yaml: bool = True,
+        fitting_config: Optional[FittingConfig] = None
+    ):
         """
         Parameters
         ----------
-        area_cm2 : float
+        area_cm2 : float, optional
             有效接觸面積 (cm²)
-        temperature : float
-            絕對溫度 (K), default=300
-        a_star : float
-            Richardson constant (A/cm²/K²), MoS₂ ~54
+        temperature : float, optional
+            溫度 (K)
+        a_star : float, optional
+            Richardson constant (A/cm²/K²)
+        layer_type : str
+            層數類型
+        load_from_yaml : bool
+            是否從 YAML 載入預設
+        fitting_config : FittingConfig, optional
+            自訂擬合參數
         """
-        self.area_cm2 = area_cm2
-        self.T = temperature
-        self.A_star = a_star
+        # 載入 YAML 預設
+        if load_from_yaml:
+            try:
+                physics = ConfigLoader.get_physics_params()
+                default_area = ConfigLoader.get_area('cafm_tip_10nm')
+                if fitting_config is None:
+                    fitting_cfg_dict = ConfigLoader.get_fitting_config(layer_type)
+                    fitting_config = FittingConfig(**fitting_cfg_dict)
+            except (FileNotFoundError, KeyError):
+                physics = {'temperature': 300.0, 'a_star': 54.0}
+                default_area = 7.854e-13
+        else:
+            physics = {'temperature': 300.0, 'a_star': 54.0}
+            default_area = 7.854e-13
+        
+        # 參數優先級：傳入 > YAML > 硬編碼
+        self.area_cm2 = area_cm2 if area_cm2 is not None else default_area
+        self.T = temperature if temperature is not None else physics['temperature']
+        self.A_star = a_star if a_star is not None else physics['a_star']
+        self.layer_type = layer_type
         
         # 物理常數
-        self.k_B_eV = 8.617333e-5  # eV/K
-        self.k_B_J = 1.380649e-23  # J/K
-        self.q = 1.6021766e-19     # C
-        
-        # 熱電壓
-        self.V_T = (self.k_B_J * self.T) / self.q  # ~0.0259 V @ 300K
+        self.k_B_J = 1.380649e-23
+        self.q = 1.6021766e-19
+        self.V_T = (self.k_B_J * self.T) / self.q
         
         # 初始化擬合器
-        self.fitter = SlidingWindowCheungFitter()
-    
-    def calculate_barrier(self, slope: float, intercept: float) -> Dict[str, float]:
-        """
-        從 Cheung Function II 的擬合結果計算 ΦB
-        
-        Parameters
-        ----------
-        slope : float
-            H(I) vs I 的斜率 (應等於 Rs)
-        intercept : float  
-            H(I) vs I 的截距 (應等於 n·ΦB)
-        n : float
-            理想因子 (從 Cheung I 獲得)
-            
-        Returns
-        -------
-        dict : {'phi_b': float, 'Rs': float}
-        """
-        # 注意: 此方法通常由內部自動呼叫，使用者一般不需要直接調用
-        # 保留此方法供進階使用者或驗證用
-        return {'Rs': slope, 'n_phiB': intercept}
+        self.fitter = SlidingWindowCheungFitter(config=fitting_config)
     
     def fit_pixel(self, bias: np.ndarray, current: np.ndarray, 
-                  layer_type: str = "multilayer") -> FittingResult:
+                  layer_type: Optional[str] = None,
+                  forward_bias_only: bool = True,
+                  min_forward_bias: float = 0.0) -> FittingResult:
         """
         對單一像素執行擬合
         
@@ -85,46 +105,47 @@ class SchottkyAnalyzer:
             偏壓向量 (V)
         current : np.ndarray
             電流向量 (A)
-        layer_type : str
-            "monolayer" | "bilayer" | "multilayer"
-            
-        Returns
-        -------
-        FittingResult
+        layer_type : str, optional
+            層數類型
+        forward_bias_only : bool, default=True
+            是否只處理正向偏壓
+        min_forward_bias : float, default=0.0
+            正向偏壓最小值 (V)
         """
+        layer = layer_type or self.layer_type
         return self.fitter.fit(
             bias=bias,
             current=current,
             area_cm2=self.area_cm2,
             T=self.T,
             a_star=self.A_star,
-            layer_type=layer_type
+            layer_type=layer,
+            forward_bias_only=forward_bias_only,
+            min_forward_bias=min_forward_bias
         )
     
-    def batch_fit(self, 
-                  h5map,  # HDF5Analyzer instance
-                  pixel_list: Optional[List[Tuple[int, int]]] = None,
-                  layer_type: str = "multilayer",
-                  skip_points: int = 3) -> Dict[Tuple[int, int], FittingResult]:
+    def batch_fit(self, h5map, pixel_list: Optional[List[Tuple[int, int]]] = None,
+                  layer_type: Optional[str] = None, skip_points: Optional[int] = None,
+                  forward_bias_only: bool = True,
+                  min_forward_bias: float = 0.1) -> Dict:  # ← 新增參數
         """
         批量擬合多個像素
         
         Parameters
         ----------
-        h5map : HDF5Analyzer
-            已初始化的 HDF5 分析器
-        pixel_list : list of (x, y), optional
-            要處理的像素座標，None 表示全部
-        layer_type : str
-            預設層數類型
-        skip_points : int
-            跳過 I-V 曲線前幾個點 (噪聲)
-            
-        Returns
-        -------
-        dict : {(x, y): FittingResult}
+        forward_bias_only : bool, default=True
+            是否只處理正向偏壓
+        min_forward_bias : float, default=0.1
+            最小正向偏壓 (V)
         """
         from tqdm import tqdm
+        
+        if skip_points is None:
+            try:
+                config = ConfigLoader.load()
+                skip_points = config.get('batch', {}).get('skip_initial_points', 3)
+            except:
+                skip_points = 3
         
         metadata = h5map.metadata
         if pixel_list is None:
@@ -132,86 +153,117 @@ class SchottkyAnalyzer:
                          for x in range(metadata.x_pixels)]
         
         results = {}
-        
         for x, y in tqdm(pixel_list, desc="Fitting pixels"):
-            # 獲取數據
             spectrum = h5map.get_spectrum_at_pixel(x, y)[skip_points:]
             bias = h5map.bias_vector[skip_points:]
             
-            # 擬合
-            result = self.fit_pixel(bias, spectrum, layer_type=layer_type)
+            # ✅ 關鍵：傳遞 forward_bias_only 和 min_forward_bias
+            result = self.fit_pixel(
+                bias, spectrum, 
+                layer_type=layer_type,
+                forward_bias_only=forward_bias_only,
+                min_forward_bias=min_forward_bias
+            )
             results[(x, y)] = result
         
         return results
-    
-    def results_to_dataframe(self, results: Dict) -> 'pd.DataFrame':
+
+    def fit_pixel_adaptive(self, bias: np.ndarray, current: np.ndarray, 
+                          layer_type: Optional[str] = None,
+                          forward_bias_only: bool = True,
+                          min_forward_bias: float = 0.1,
+                          max_attempts: int = 3) -> FittingResult:
         """
-        將擬合結果轉為 pandas DataFrame 方便分析
+        自適應擬合：自動放寬約束直到成功
         
         Parameters
         ----------
-        results : dict
-            batch_fit 的輸出
-            
-        Returns
-        -------
-        pd.DataFrame
+        max_attempts : int
+            最大嘗試次數
         """
-        import pandas as pd
+        # 定義多組參數配置（從嚴格到寬鬆）
+        config_attempts = [
+            # 嘗試 1: 標準參數
+            {'n_min': 0.5, 'n_max': 5.0, 'min_r_squared': 0.90, 'window_size': 25},
+            # 嘗試 2: 放寬 R²
+            {'n_min': 0.5, 'n_max': 6.0, 'min_r_squared': 0.85, 'window_size': 25},
+            # 嘗試 3: 更寬鬆
+            {'n_min': 0.3, 'n_max': 8.0, 'min_r_squared': 0.80, 'window_size': 20},
+        ]
         
+        for i, cfg in enumerate(config_attempts[:max_attempts]):
+            # 臨時修改配置
+            original_config = self.fitter.config
+            from dataclasses import replace
+            self.fitter.config = replace(
+                self.fitter.config,
+                n_min=cfg['n_min'],
+                n_max=cfg['n_max'],
+                min_r_squared=cfg['min_r_squared'],
+                window_size=cfg['window_size']
+            )
+            
+            # 執行擬合
+            result = self.fit_pixel(
+                bias=bias,
+                current=current,
+                layer_type=layer_type,
+                forward_bias_only=forward_bias_only,
+                min_forward_bias=min_forward_bias
+            )
+            
+            if result.success:
+                print(f"✅ 嘗試 {i+1} 成功 (n=[{cfg['n_min']},{cfg['n_max']}], R²>{cfg['min_r_squared']})")
+                return result
+            else:
+                print(f"⚠️ 嘗試 {i+1} 失敗：{result.warning[:50]}...")
+        
+        # 所有嘗試都失敗，恢復原配置
+        self.fitter.config = original_config
+        return result  # 返回最後一次結果
+    
+    def batch_fit_adaptive(self, h5map, pixel_list: Optional[List[Tuple[int, int]]] = None,
+                          layer_type: Optional[str] = None, **kwargs) -> Dict:
+        """批量自適應擬合"""
+        from tqdm import tqdm
+        
+        if pixel_list is None:
+            pixel_list = [(x, y) for y in range(h5map.metadata.y_pixels) 
+                         for x in range(h5map.metadata.x_pixels)]
+        
+        results = {}
+        for x, y in tqdm(pixel_list, desc="Adaptive fitting"):
+            spectrum = h5map.get_spectrum_at_pixel(x, y)[3:]
+            bias = h5map.bias_vector[3:]
+            result = self.fit_pixel_adaptive(bias, spectrum, layer_type=layer_type, **kwargs)
+            results[(x, y)] = result
+        
+        return results
+        
+    def results_to_dataframe(self, results: Dict) -> 'pd.DataFrame':
+        """轉為 DataFrame"""
+        import pandas as pd
         rows = []
         for (x, y), res in results.items():
             row = {
                 'x': x, 'y': y,
                 'success': res.success,
-                'n': res.n,
-                'Rs': res.Rs,
-                'phi_b': res.phi_b,
-                'r_squared': res.r_squared,
-                'score': res.score,
-                'fit_range': res.fit_range,
-                'warning': res.warning
+                'n': res.n, 'Rs': res.Rs, 'phi_b': res.phi_b,
+                'r_squared': res.r_squared, 'score': res.score,
+                'fit_range': res.fit_range, 'warning': res.warning
             }
             rows.append(row)
-        
         return pd.DataFrame(rows)
     
-    def export_heatmap_data(self, results: Dict, 
-                           output_path: Union[str, Path]) -> Path:
-        """
-        導出 2D heatmap 數據 (CSV + NPZ)
-        
-        Parameters
-        ----------
-        results : dict
-            batch_fit 的輸出
-        output_path : str or Path
-            輸出路徑 (不含副檔名)
-            
-        Returns
-        -------
-        Path : 實際輸出的 .npz 路徑
-        """
-        import pandas as pd
-        output_path = Path(output_path)
-        
-        # 1. CSV: 表格格式
-        df = self.results_to_dataframe(results)
-        df.to_csv(f"{output_path}.csv", index=False)
-        
-        # 2. NPZ: 2D array 格式 (方便 imshow)
-        if results:
-            # 從任意 result 獲取 metadata
-            sample_res = next(iter(results.values()))
-            # 這裡假設 h5map metadata 可訪問，實際使用時需傳入
-            # 簡化版：只儲存成功結果的 2D map
-            success_map = {
-                (x, y): res.phi_b if res.success else np.nan 
-                for (x, y), res in results.items()
-            }
-            # 轉為 2D array 需要知道 dimensions，建議由 caller 處理
-            np.savez(f"{output_path}.npz", 
-                     results=results,
-                     timestamp=np.datetime64('now'))
-        
-        return output_path.with_suffix('.npz')
+    def print_config_summary(self):
+        """打印配置摘要"""
+        print("🔬 SchottkyAnalyzer Configuration")
+        print("=" * 50)
+        print(f"   Area: {self.area_cm2:.3e} cm²")
+        print(f"   Temperature: {self.T} K")
+        print(f"   A**: {self.A_star} A/cm²/K²")
+        print(f"   Layer type: {self.layer_type}")
+        print(f"   V_T: {self.V_T:.4f} V")
+        print(f"   Window: {self.fitter.config.window_size} pts")
+        print(f"   n range: [{self.fitter.config.n_min}, {self.fitter.config.n_max}]")
+        print(f"   min R²: {self.fitter.config.min_r_squared}")

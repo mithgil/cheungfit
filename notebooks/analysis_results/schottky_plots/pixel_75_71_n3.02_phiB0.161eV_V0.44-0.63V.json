@@ -1,0 +1,38 @@
+{
+  "timestamp": "2026-04-02T11:49:05.236938",
+  "pixel": [
+    75,
+    71
+  ],
+  "fitting_window": {
+    "V_start": 0.43687367,
+    "V_end": 0.62925863,
+    "indices": [
+      42,
+      67
+    ]
+  },
+  "results": {
+    "phi_b_eV": 0.1614759152854857,
+    "n": 3.018456972862986,
+    "Rs_ohm": 6217.6207004448215,
+    "r_squared": 0.9901755300944967
+  },
+  "parameters": {
+    "area_cm2": 7.854e-13,
+    "temperature_K": 300.0,
+    "a_star": 54.0,
+    "window_size": 25,
+    "n_range": [
+      0.5,
+      5.0
+    ],
+    "min_r_squared": 0.9
+  },
+  "statistics": {
+    "total_windows": 72,
+    "passed": 12,
+    "n_median": 3.248207283759125,
+    "n_std": 21.43276550055215
+  }
+}
